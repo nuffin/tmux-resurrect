@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 if [ -d "$HOME/.tmux/resurrect" ]; then
         default_resurrect_dir="$HOME/.tmux/resurrect"
 else
@@ -100,7 +102,8 @@ resurrect_dir() {
 	if [ -z "$_RESURRECT_DIR" ]; then
 		local path="$(get_tmux_option "$resurrect_dir_option" "$default_resurrect_dir")"
 		# expands tilde, $HOME and $HOSTNAME if used in @resurrect-dir
-		echo "$path" | sed "s,\$HOME,$HOME,g; s,\$HOSTNAME,$(hostname),g; s,\~,$HOME,g"
+                path=$(echo "$path" | sed "s,\$HOME,$HOME,g; s,\$HOSTNAME,$(hostname),g; s,\~,$HOME,g; s,\\\\\\$,$,g; s,\\\/,/,g; s,/\\\,/,g;")
+                eval "echo \"$path\""
 	else
 		echo "$_RESURRECT_DIR"
 	fi
