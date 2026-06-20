@@ -376,11 +376,23 @@ cleanup_restored_pane_contents() {
 # in restore_pane(). Running this step after process restoration ensures
 # custom pane titles (e.g. "hermes-exec-pane", "hermes-dialog-pane")
 # survive the shell restart.
+#
+# To avoid restoring stale dynamic titles (e.g. "user@host: /old/path") on
+# panes that rely on the shell to set their title, we only restore titles
+# for panes that have a custom pane-border override (pane_border lines).
+# This links title restoration to the presence of a deliberate visual
+# customization.
 restore_pane_titles() {
+	local border_panes=""
+	border_panes="$(awk 'BEGIN { FS="	" } /^pane_border/ { print $2":"$3"."$4 }' "$(last_resurrect_file)")"
 	awk 'BEGIN { FS="	"; OFS="	" } /^pane/ { print $2, $3, $6, $7; }' "$(last_resurrect_file)" |
 		while IFS=$d read -r session_name window_number pane_index pane_title; do
-			if pane_exists "$session_name" "$window_number" "$pane_index"; then
-				tmux select-pane -t "${session_name}:${window_number}.${pane_index}" -T "$pane_title"
+			local key="${session_name}:${window_number}.${pane_index}"
+			# only restore title for panes with custom border overrides
+			if echo "$border_panes" | grep -qxF "$key"; then
+				if pane_exists "$session_name" "$window_number" "$pane_index"; then
+					tmux select-pane -t "${session_name}:${window_number}.${pane_index}" -T "$pane_title"
+				fi
 			fi
 		done
 }
