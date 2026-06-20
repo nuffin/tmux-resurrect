@@ -385,13 +385,21 @@ cleanup_restored_pane_contents() {
 restore_pane_titles() {
 	local border_panes=""
 	border_panes="$(awk 'BEGIN { FS="	" } /^pane_border/ { print $2":"$3"."$4 }' "$(last_resurrect_file)")"
-	awk 'BEGIN { FS="	"; OFS="	" } /^pane/ { print $2, $3, $6, $7; }' "$(last_resurrect_file)" |
+	# NOTE: /^pane	/ avoids matching "pane_border" lines
+	awk 'BEGIN { FS="	"; OFS="	" } /^pane	/ { print $2, $3, $6, $7; }' "$(last_resurrect_file)" |
 		while IFS=$d read -r session_name window_number pane_index pane_title; do
 			local key="${session_name}:${window_number}.${pane_index}"
 			# only restore title for panes with custom border overrides
 			if echo "$border_panes" | grep -qxF "$key"; then
 				if pane_exists "$session_name" "$window_number" "$pane_index"; then
+					# select-pane -T changes the active pane, which would
+					# undo restore_active_pane_for_each_window. Save and
+					# restore the active pane around the title set.
+					local previous_active="$(tmux display -t "${session_name}:${window_number}" -p '#{pane_id}' 2>/dev/null)"
 					tmux select-pane -t "${session_name}:${window_number}.${pane_index}" -T "$pane_title"
+					if [ -n "$previous_active" ]; then
+						tmux select-pane -t "$previous_active" 2>/dev/null
+					fi
 				fi
 			fi
 		done
