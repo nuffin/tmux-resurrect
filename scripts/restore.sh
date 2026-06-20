@@ -363,6 +363,21 @@ cleanup_restored_pane_contents() {
 	fi
 }
 
+# Re-apply pane titles after all pane processes have been restored.
+# Shells (bash, zsh, etc.) typically set the pane title via escape sequences
+# in PROMPT_COMMAND/PS1, which overwrites the title set during pane creation
+# in restore_pane(). Running this step after process restoration ensures
+# custom pane titles (e.g. "hermes-exec-pane", "hermes-dialog-pane")
+# survive the shell restart.
+restore_pane_titles() {
+	awk 'BEGIN { FS="	"; OFS="	" } /^pane/ { print $2, $3, $6, $7; }' "$(last_resurrect_file)" |
+		while IFS=$d read -r session_name window_number pane_index pane_title; do
+			if pane_exists "$session_name" "$window_number" "$pane_index"; then
+				tmux select-pane -t "${session_name}:${window_number}.${pane_index}" -T "$pane_title"
+			fi
+		done
+}
+
 main() {
 	if supported_tmux_version_ok && check_saved_session_exists; then
 		start_spinner "Restoring..." "Tmux restore complete!"
@@ -375,6 +390,10 @@ main() {
 		# below functions restore exact cursor positions
 		restore_active_pane_for_each_window
 		restore_zoomed_windows
+		# restore pane titles after process restoration — shells (bash/zsh)
+		# set the title via escape sequences, which would overwrite the title
+		# set during pane creation otherwise
+		restore_pane_titles
 		restore_grouped_sessions  # also restores active and alt windows for grouped sessions
 		restore_active_and_alternate_windows
 		restore_active_and_alternate_sessions
