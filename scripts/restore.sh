@@ -287,7 +287,7 @@ handle_session_0() {
 restore_window_properties() {
 	local window_name
 	\grep '^window' $(last_resurrect_file) |
-		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename; do
+		while IFS=$d read line_type session_name window_number window_name window_active window_flags window_layout automatic_rename border_status border_format; do
 			tmux select-layout -t "${session_name}:${window_number}" "$window_layout"
 
 			# Below steps are properly handling window names and automatic-rename
@@ -299,6 +299,13 @@ restore_window_properties() {
 				tmux set-option -u -t "${session_name}:${window_number}" automatic-rename
 			else
 				tmux set-option -t "${session_name}:${window_number}" automatic-rename "$automatic_rename"
+			fi
+			# Restore window-level pane-border-status and pane-border-format
+			if [ -n "$border_status" ] && [ "$border_status" != ":" ]; then
+				tmux set-option -w -t "${session_name}:${window_number}" pane-border-status "$border_status"
+			fi
+			if [ -n "$border_format" ] && [ "$border_format" != ":" ]; then
+				tmux set-option -w -t "${session_name}:${window_number}" pane-border-format "$border_format"
 			fi
 		done
 }
@@ -378,6 +385,23 @@ restore_pane_titles() {
 		done
 }
 
+# Read saved pane_border lines and re-apply per-pane border options
+# (pane-border-status and pane-border-format) via tmux set -p.
+restore_pane_borders() {
+	awk 'BEGIN { FS="	"; OFS="	" } /^pane_border/ { print $2, $3, $4, $5, $6; }' "$(last_resurrect_file)" |
+		while IFS=$d read -r session_name window_number pane_index status format; do
+			local target="${session_name}:${window_number}.${pane_index}"
+			if pane_exists "$session_name" "$window_number" "$pane_index"; then
+				if [ -n "$status" ]; then
+					tmux set -p -t "$target" pane-border-status "$status"
+				fi
+				if [ -n "$format" ]; then
+					tmux set -p -t "$target" pane-border-format "$format"
+				fi
+			fi
+		done
+}
+
 main() {
 	if supported_tmux_version_ok && check_saved_session_exists; then
 		start_spinner "Restoring..." "Tmux restore complete!"
@@ -394,6 +418,8 @@ main() {
 		# set the title via escape sequences, which would overwrite the title
 		# set during pane creation otherwise
 		restore_pane_titles
+		# restore pane borders (status and format label)
+		restore_pane_borders
 		restore_grouped_sessions  # also restores active and alt windows for grouped sessions
 		restore_active_and_alternate_windows
 		restore_active_and_alternate_sessions
