@@ -24,7 +24,7 @@ is_line_type() {
 	local line_type="$1"
 	local line="$2"
 	echo "$line" |
-		\grep -q "^$line_type"
+		\grep -q "^${line_type}"$'	'
 }
 
 check_saved_session_exists() {
